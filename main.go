@@ -8,7 +8,7 @@ import (
 	"github.com/flynntdev/go_final_project/db"
 )
 
-// webDir - путь к директории с файлами, которые сервер будет раздавать
+// webDir -путь к директории с файлами, которые сервер будет раздавать
 const webDir = "./web"
 
 func main() {

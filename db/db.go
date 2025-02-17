@@ -10,13 +10,24 @@ import (
 )
 
 func CheckAndCreateDB() {
-	appPath, err := os.Executable()
-	if err != nil {
-		log.Fatal(err)
-	}
+	// Получаем значение переменной окружения TODO_DBFILE
+	dbFileEnv := os.Getenv("TODO_DBFILE")
 
-	// Формируем путь к файлу БД
-	dbFile := filepath.Join(filepath.Dir(appPath), "scheduler.db")
+	var dbFile string
+
+	if dbFileEnv != "" {
+		// Если переменная окружения задана, используем её значение как путь
+		dbFile = dbFileEnv
+	} else {
+		// Если переменная окружения не задана, формируем путь по умолчанию
+		appPath, err := os.Executable()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Формируем путь к файлу БД
+		dbFile = filepath.Join(filepath.Dir(appPath), "scheduler.db")
+	}
 
 	// Проверяем существование файла
 	if _, err := os.Stat(dbFile); os.IsNotExist(err) {
@@ -27,7 +38,6 @@ func CheckAndCreateDB() {
 		}
 		defer db.Close()
 
-		// Выполняем запрос для создания пустой таблицы (например, 'tasks')
 		_, err = db.Exec(`CREATE TABLE scheduler (
     		id INTEGER PRIMARY KEY AUTOINCREMENT,
     		date DATE NOT NULL,
