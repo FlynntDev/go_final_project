@@ -1,19 +1,16 @@
-package main
+package server
 
 import (
 	"fmt"
 	"net/http"
 	"os"
-
-	"github.com/flynntdev/go_final_project/db"
 )
 
 // webDir -путь к директории с файлами, которые сервер будет раздавать
 const webDir = "./web"
 
-func main() {
+func ServerStart() {
 
-	db.CheckAndCreateDB()
 	// Получаем порт из переменной окружения TODO_PORT, если не задано, используем 7540
 	port := os.Getenv("TODO_PORT")
 
