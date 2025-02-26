@@ -23,6 +23,7 @@ func ServerStart() {
 
 	// Регистрируем обработчик API
 	http.HandleFunc("/api/nextdate", NextDateHandler)
+	http.HandleFunc("/api/task", TaskHandler)
 
 	// Регистрируем обработчик для раздачи статических файлов
 	fileServer := http.FileServer(http.Dir(webDir))
@@ -64,4 +65,13 @@ func NextDateHandler(w http.ResponseWriter, r *http.Request) {
 	// Отправляем дату в ответ
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte(nextDate))
+}
+
+func TaskHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		api.HandleAddTask(w, r)
+	default:
+		http.Error(w, "метод не поддерживается", http.StatusMethodNotAllowed)
+	}
 }
