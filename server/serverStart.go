@@ -61,7 +61,7 @@ func NextDateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Отправляем просто дату в ответ
+	// Отправляем дату в ответ
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte(nextDate))
 }
