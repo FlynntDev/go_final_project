@@ -11,11 +11,6 @@ import (
 )
 
 func NextDate(now time.Time, date string, repeat string) (string, error) {
-	taskDate, err := time.Parse("20060102", date)
-	if err != nil {
-		return "", fmt.Errorf("ошибка при считывании даты: %s", date)
-	}
-
 	switch {
 	case strings.HasPrefix(repeat, "d "):
 		daysStr := strings.TrimPrefix(repeat, "d ")
@@ -28,7 +23,14 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 			return "", fmt.Errorf("перенос задачи на 400 и более дней: %s;", repeat)
 		}
 
-		taskDate = taskDate.AddDate(0, 0, daysNum)
+		taskDate, err := time.Parse("20060102", date)
+
+		if err != nil {
+			return "", fmt.Errorf("ошибка при считывании даты: %s", date)
+		}
+
+		taskDate = taskDate.AddDate(0, 0, daysNum) // для учета пограничных вариантов
+
 		for taskDate.Before(now) {
 			taskDate = taskDate.AddDate(0, 0, daysNum)
 		}
@@ -36,107 +38,182 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 		return taskDate.Format("20060102"), nil
 
 	case repeat == "y":
-		taskDate = taskDate.AddDate(1, 0, 0)
+		taskDate, err := time.Parse("20060102", date)
+		if err != nil {
+			return "", fmt.Errorf("ошибка при считывании даты: %s", date)
+		}
+
+		taskDate = taskDate.AddDate(1, 0, 0) // для учета пограничных вариантов
 		for taskDate.Before(now) {
 			taskDate = taskDate.AddDate(1, 0, 0)
 		}
 		return taskDate.Format("20060102"), nil
 
 	case strings.HasPrefix(repeat, "w "):
-		weekdaysInt, err := parseIntList(strings.TrimPrefix(repeat, "w "))
-		if err != nil {
-			return "", fmt.Errorf("неверный формат: %s ; %v", repeat, err)
-		}
-		for i, num := range weekdaysInt {
-			if num == 7 {
-				weekdaysInt[i] = 0
+		weekdaysStr := strings.Split(strings.TrimPrefix(repeat, "w "), ",")
+		weekdaysInt := make([]int, len(weekdaysStr))
+		for i := range weekdaysStr {
+			num, err := strconv.Atoi(weekdaysStr[i])
+			if err != nil {
+				return "", fmt.Errorf("неверный формат: %s ; %v", repeat, err)
 			}
+			if num > 7 || num < 0 {
+				return "", fmt.Errorf("неверный формат: %s ; %v", repeat, err)
+			}
+			if num == 7 {
+				num = 0
+			}
+			weekdaysInt[i] = num
 		}
-		return getNextWeekdayDate(now, taskDate, weekdaysInt), nil
+		taskDate, err := time.Parse("20060102", date)
+		if err != nil {
+			return "", fmt.Errorf("ошибка при считывании даты: %s", date)
+		}
+
+		if !taskDate.After(now) {
+			taskDate = now.AddDate(0, 0, 1)
+		}
+
+		found := false
+		for {
+			for _, day := range weekdaysInt {
+
+				if int(taskDate.Weekday()) == day {
+					found = true
+					break
+				}
+
+			}
+			if found {
+				break
+			}
+			taskDate = taskDate.AddDate(0, 0, 1)
+		}
+		return taskDate.Format("20060102"), nil
 
 	case strings.HasPrefix(repeat, "m "):
-		return getNextMonthlyDate(now, taskDate, repeat)
+		splitted := strings.Split(repeat, " ")
+		fmt.Println(splitted)
+		if len(splitted) > 3 || len(splitted) < 2 {
+			return "", fmt.Errorf("неверный формат: %s;", repeat)
+		}
+
+		daysStr := strings.Split(splitted[1], ",")
+		var daysNum []int
+
+		for i := range daysStr {
+			dayNum, err := strconv.Atoi(daysStr[i])
+			if err != nil || dayNum > 31 || dayNum == 0 || dayNum < -2 {
+				return "", fmt.Errorf("неверный формат: %s;", repeat)
+			}
+
+			daysNum = append(daysNum, dayNum)
+		}
+
+		sort.Slice(daysNum, func(i, j int) bool {
+			return daysNum[i] < daysNum[j]
+		})
+
+		taskDate, err := time.Parse("20060102", date)
+		if err != nil {
+			return "", fmt.Errorf("ошибка при считывании даты: %s", date)
+		}
+
+		if !taskDate.After(now) {
+			taskDate = now.AddDate(0, 0, 1)
+		}
+		found := false
+
+		taskDate = checkFirstMonth(daysNum, taskDate)
+
+		if len(splitted) == 3 {
+
+			monthsStr := strings.Split(splitted[2], ",")
+			var months []int
+
+			for i := range monthsStr {
+				mthNum, err := strconv.Atoi(monthsStr[i])
+				if err != nil || mthNum > 12 || mthNum < 1 {
+					return "", fmt.Errorf("неверный формат: %s;", repeat)
+				}
+
+				months = append(months, mthNum)
+			}
+
+			sort.Slice(months, func(i, j int) bool {
+				return months[i] < months[j]
+			})
+
+			for {
+				for _, v := range months {
+					if int(taskDate.Month()) == v {
+						found = true
+						break
+					}
+				}
+
+				if found {
+					break
+				}
+
+				taskDate = taskDate.AddDate(0, 1, 0)
+			}
+			//
+		}
+
+		found = false
+		for {
+			for _, v := range daysNum {
+				if v < 0 {
+					v = v + 1
+					lastDay := time.Date(taskDate.Year(), taskDate.Month()+1, 0, 0, 0, 0, 0, time.UTC)
+					v = lastDay.AddDate(0, 0, v).Day()
+				}
+
+				if taskDate.Day() == v {
+					found = true
+					break
+				}
+			}
+
+			if found {
+				break
+			}
+
+			taskDate = taskDate.AddDate(0, 0, 1)
+		}
+		return taskDate.Format("20060102"), nil
 
 	default:
 		return "", fmt.Errorf("неверный формат поля 'repeat': %s", repeat)
 	}
 }
 
-func parseIntList(input string) ([]int, error) {
-	parts := strings.Split(input, ",")
-	result := make([]int, len(parts))
-	for i, part := range parts {
-		val, err := strconv.Atoi(part)
-		if err != nil {
-			return nil, err
-		}
-		result[i] = val
-	}
-	return result, nil
-}
-
-func getNextWeekdayDate(now, taskDate time.Time, weekdays []int) string {
-	sort.Ints(weekdays)
-	if !taskDate.After(now) {
-		taskDate = now.AddDate(0, 0, 1)
-	}
-	for {
-		for _, day := range weekdays {
-			if int(taskDate.Weekday()) == day {
-				return taskDate.Format("20060102")
-			}
-		}
-		taskDate = taskDate.AddDate(0, 0, 1)
-	}
-}
-
-func getNextMonthlyDate(now, taskDate time.Time, repeat string) (string, error) {
-	parts := strings.Split(repeat, " ")
-	if len(parts) < 2 || len(parts) > 3 {
-		return "", fmt.Errorf("неверный формат: %s", repeat)
-	}
-	daysNum, err := parseIntList(parts[1])
-	if err != nil {
-		return "", fmt.Errorf("неверный формат дней: %s", repeat)
-	}
-
-	var months []int
-	if len(parts) == 3 {
-		months, err = parseIntList(parts[2])
-		if err != nil {
-			return "", fmt.Errorf("неверный формат месяцев: %s", repeat)
-		}
-		sort.Ints(months)
-	}
-	sort.Ints(daysNum)
-	taskDate = checkFirstMonth(daysNum, taskDate)
-	if len(parts) == 3 {
-		for {
-			for _, v := range months {
-				if int(taskDate.Month()) == v {
-					return taskDate.Format("20060102"), nil
-				}
-			}
-			taskDate = taskDate.AddDate(0, 1, 0)
-		}
-	}
-	return taskDate.Format("20060102"), nil
-}
-
 func checkFirstMonth(daysNum []int, taskDate time.Time) time.Time {
+	startMonth := taskDate.Month()
+	found := false
 	for {
 		for _, v := range daysNum {
 			if v < 0 {
+				v = v + 1
 				lastDay := time.Date(taskDate.Year(), taskDate.Month()+1, 0, 0, 0, 0, 0, time.UTC)
-				v = lastDay.Day() + v + 1
+				v = lastDay.AddDate(0, 0, v).Day()
 			}
+
 			if taskDate.Day() == v {
-				return taskDate
+				found = true
+				break
 			}
 		}
+
+		if found {
+			break
+		}
+
 		taskDate = taskDate.AddDate(0, 0, 1)
-		if taskDate.Day() == 1 {
+		if taskDate.Month() != startMonth {
 			return taskDate
 		}
 	}
+	return taskDate
 }
