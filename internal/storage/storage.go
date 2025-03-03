@@ -40,12 +40,12 @@ func (s *Store) PostTask(t task.Task) (string, error) {
 	query := `INSERT INTO scheduler (date, title, comment, repeat) VALUES (?, ?, ?, ?)`
 	res, err := s.db.Exec(query, t.Date, t.Title, t.Comment, t.Repeat)
 	if err != nil {
-		return "", fmt.Errorf(`{"error":"Ошибка добавления задачи в базу данных"}`)
+		return "", fmt.Errorf("error in executing query INSERT: %w", err)
 
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
-		return "", fmt.Errorf(`{"error":"Ошибка получения ID добавленной задачи"}`)
+		return "", fmt.Errorf("error in executing query INSERT: %w", err)
 	}
 	return fmt.Sprintf("%d", id), nil
 }
@@ -58,7 +58,7 @@ func (s *Store) GetTask(id string) (task.Task, error) {
 	row := s.db.QueryRow("SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?", id)
 	err := row.Scan(&t.ID, &t.Date, &t.Title, &t.Comment, &t.Repeat)
 	if err != nil {
-		return task.Task{}, fmt.Errorf(`{"error":"Задача не найдена"}`)
+		return task.Task{}, fmt.Errorf("error in executing query SELECT: %w", err)
 	}
 	return t, nil
 }
@@ -66,25 +66,25 @@ func (s *Store) GetTask(id string) (task.Task, error) {
 func (s *Store) PutTask(t task.Task) error {
 	err := t.CheckID()
 	if err != nil {
-		return fmt.Errorf(err.Error())
+		return err
 	}
 	err = t.CheckTitle()
 	if err != nil {
-		return fmt.Errorf(err.Error())
+		return err
 	}
 	parseDate, err := t.CheckData()
 	if err != nil {
-		return fmt.Errorf(err.Error())
+		return err
 	}
 	t.Date, err = t.CheckRepeat(parseDate)
 	if err != nil {
-		return fmt.Errorf(err.Error())
+		return err
 	}
 
 	query := `UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?`
 	_, err = s.db.Exec(query, t.Date, t.Title, t.Comment, t.Repeat, t.ID)
 	if err != nil {
-		return fmt.Errorf(`{"error":"Ошибка обновления задачи в базе данных"}`)
+		return fmt.Errorf("error in executing query UPDATE: %w", err)
 	}
 	return nil
 }
@@ -95,12 +95,12 @@ func (s *Store) DeleteTask(id string) error {
 	}
 	_, err := strconv.ParseInt(id, 10, 32)
 	if err != nil {
-		return fmt.Errorf(`{"error":"не указан индификатор задачи"}`)
+		return fmt.Errorf("error in executing query DELETE: %w", err)
 	}
 	query := "DELETE FROM scheduler WHERE id = ?"
 	_, err = s.db.Exec(query, id)
 	if err != nil {
-		return fmt.Errorf(`{"error":"не получается удалить задачу"}`)
+		return fmt.Errorf("error in executing query DELETE: %w", err)
 	}
 	return nil
 }
@@ -121,13 +121,13 @@ func (s *Store) SearchTask(search string) ([]task.Task, error) {
 		rows, err = s.db.Query(query, search, search, limit)
 	}
 	if err != nil {
-		return []task.Task{}, fmt.Errorf(`{"error":"ошибка запроса"}`)
+		return []task.Task{}, fmt.Errorf("error in executing query: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		err := rows.Scan(&t.ID, &t.Date, &t.Title, &t.Comment, &t.Repeat)
 		if err != nil {
-			return []task.Task{}, fmt.Errorf(`{"error":"ошибка сканирования запроса"}`)
+			return []task.Task{}, fmt.Errorf("error in executing query: %w", err)
 		}
 		tasks = append(tasks, t)
 	}
@@ -148,30 +148,30 @@ func (s *Store) DoneTask(id string) error {
 	}
 	_, err := strconv.ParseInt(id, 10, 32)
 	if err != nil {
-		return fmt.Errorf(`{"error":"не указан индификатор задачи"}`)
+		return fmt.Errorf("error in executing query: %w", err)
 	}
 
 	row := s.db.QueryRow("SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?", id)
 	err = row.Scan(&task.ID, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
-		return fmt.Errorf(`{"error":"Задача не найдена"}`)
+		return fmt.Errorf("error in executing query: %w", err)
 	}
 	if task.Repeat == "" {
 		_, err := s.db.Exec("DELETE FROM scheduler WHERE id=?", task.ID)
 		if err != nil {
-			return fmt.Errorf(`{"error":"не получается удалить задачу"}`)
+			return fmt.Errorf("error in executing query: %w", err)
 		}
 	} else {
 		next, err := api.NextDate(time.Now(), task.Date, task.Repeat)
 		if err != nil {
-			return fmt.Errorf(`{"error":"неверное правило повторения"}`)
+			return fmt.Errorf("error in executing query: %w", err)
 		}
 		task.Date = next
 	}
 	query := `UPDATE scheduler SET date = ? WHERE id = ?`
 	_, err = s.db.Exec(query, task.Date, task.ID)
 	if err != nil {
-		return fmt.Errorf(`{"error":"Ошибка обновления даты выполнения задачи"}`)
+		return fmt.Errorf("error in executing query UPDATE: %w", err)
 	}
 	return nil
 }
