@@ -1,0 +1,5 @@
+/db/scheduler.db
+*.db
+*.exe
+*.env
+*.sql
